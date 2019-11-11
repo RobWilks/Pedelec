@@ -18,8 +18,8 @@
 // reedSwitchPin PB2;     // port of the reed switch (physical pin above)
 // electromagnetPin1 PB3;     // two EM ports
 // electromagnetPin2 PB4;     //
-// ledEMPin PB1;        // shows EM status
-// ledSleepPin PB0;       // LED to show sleeping
+// ledEMPin PB0;        // shows EM status
+// ledSleepPin PB1;       // LED to show sleeping
 
 
 #include <Sleepy.h>
@@ -31,9 +31,9 @@
 const long timeDebounce = 1; //debouncing time in milliseconds
 const long timeOutputPulse = 30; // duration of electromagnet pulse in milliseconds
 const long timeSleep = 30000; // elapsed time before shutdown in milliseconds
-const long timeSlowest = 4000; // timeLow is a threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is reduced
-const long timeSlow = 800; // timeLow is a threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is reduced
-const long timeFast = 330; // second threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is constant
+const long timeSlowest = 4000; // for values larger than this threshold there are no pulses - 4000msec is approx 2kmh
+const long timeSlow = 800; // timeLow is a threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is reduced - 800msec is approx 10kmh
+const long timeFast = 330; // second threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is constant - 330msec is approx 24kmh
 const long distSensorAxle = 300;  // normal distance from reed switch magnet to axle in mm. To do calculate time thresholds from sensor position
 
 // variables will change:
@@ -42,7 +42,7 @@ unsigned long timeStart;  // time when reed switch goes LOW
 unsigned long timeEnd;  // time when reed switch goes HIGH
 unsigned long timeRev;  // duration reed switch closed
 unsigned long timePulseOn; // time for next pulse to electromagnet
-unsigned long timePulseOff; // time for next pulse to electromagnet
+unsigned long timePulseOff; // time to turn off electromagnet
 unsigned long timeDelta; // time between electromagnet pulses
 unsigned long kappa; // constant relating input and output frequencies
 bool oldState; // was reed switch open?
@@ -82,7 +82,7 @@ void sleep()
 
 uint32_t calcTimeDelta(uint32_t dt)
 {
-	if (dt > timeSlowest) return 0;
+	if (dt > timeSlowest) return 0; // when 0 EM cannot be turned on
 	if (dt > timeSlow) return dt;
 	uint32_t deltaT = ((timeSlow << 10) - (timeSlow - dt) * kappa) >> 10;
 	if (deltaT < timeFast) return timeFast;
@@ -97,6 +97,17 @@ void initState()
 	oldState = HIGH;
 	electromagnetState = LOW;
 	timeDelta = 0; // when 0 EM cannot be turned on
+}
+
+/////////////////////////////////////////////////////////////////////////
+void flash(uint8_t nTimes)
+
+for (uint8_t i = 0; i <= nTimes; i++)
+{
+	PORTB |= (1 << PB1);
+	delay(100);
+	PORTB &= ~(1 << PB1);
+	delay(100);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -144,14 +155,14 @@ void loop()
 	{
 		if (timeNow > timePulseOff)  // turn off EM
 		{
-			PORTB &= ~((1 << PB1) | (1 << PB3) | (1 << PB4));
+			PORTB &= ~((1 << PB0) | (1 << PB3) | (1 << PB4));
 			electromagnetState = LOW;
 		}
 	}
 	else
 	if ((timeNow > timePulseOn) && (timeDelta != 0)) // turn on EM
 	{
-		PORTB |= ((1 << PB1) | (1 << PB3) | (1 << PB4));
+		PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
 		electromagnetState = HIGH;
 		timePulseOff = timeNow + timeOutputPulse;  // set time to turn off EM
 		timePulseOn = timeNow + timeDelta; // set time for next EM pulse
@@ -167,9 +178,9 @@ void loop()
 		{
 			if (!electromagnetState)  // only sleep when the EM is off
 			{
-				PORTB |= (1 << PB0);
+				flash(5);
 				sleep();
-				PORTB &= ~(1 << PB0);
+				flash(3);
 				initState();  // all state variables initialised after sleep
 			}
 		}

@@ -67,7 +67,7 @@ ISR (INT0_vect)          //External interrupt_zero ISR
 void sleep()
 {
 	GIMSK |= _BV(INT0);                     // Enable INT0 Interrupts
-	MCUCR |= 0x03;                          // ISC01 ISC00 1 1 The rising edge of INT0 generates an interrupt request.
+	MCUCR &= 0xfc;                          // ISC01 ISC00 0 0 Level LOW on INT0 generates an interrupt request.
 	ADCSRA &= ~_BV(ADEN);                   // ADC off
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN);    //
 	sleep_enable();                         // Sets the Sleep Enable bit in the MCUCR Register (SE BIT)

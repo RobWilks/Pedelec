@@ -28,23 +28,24 @@
 
 
 
-const long timeDebounce = 1; //debouncing time in milliseconds
-const long timeOutputPulse = 30; // duration of electromagnet pulse in milliseconds
-const long timeSleep = 30000; // elapsed time before shutdown in milliseconds
-const long timeSlowest = 4000; // for values larger than this threshold there are no pulses - 4000msec is approx 2kmh
-const long timeSlow = 800; // timeLow is a threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is reduced - 800msec is approx 10kmh
-const long timeFast = 330; // second threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is constant - 330msec is approx 24kmh
-const long distSensorAxle = 300;  // normal distance from reed switch magnet to axle in mm. To do calculate time thresholds from sensor position
+const uint32_t timeDebounce = 1; //debouncing time in milliseconds
+const uint32_t timeOutputPulse = 30; // duration of electromagnet pulse in milliseconds
+const uint32_t timeSleep = 30000; // elapsed time before shutdown in milliseconds
+const uint32_t timeSlowest = 4000; // for values larger than this threshold there are no pulses - 4000msec is approx 2kmh
+const uint32_t timeSlow = 800; // timeLow is a threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is reduced - 800msec is approx 10kmh
+const uint32_t timeFast = 330; // second threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is constant - 330msec is approx 24kmh
+const uint32_t distSensorAxle = 300;  // normal distance from reed switch magnet to axle in mm. To do calculate time thresholds from sensor position
+const uint32_t kappa = ((timeSlow - timeFast) << 10) / (timeSlow - (timeFast >> 1)); // constant relating input and output frequencies; we calculate 1024 
+
 
 // variables will change:
-unsigned long timeNow;
-unsigned long timeStart;  // time when reed switch goes LOW
-unsigned long timeEnd;  // time when reed switch goes HIGH
-unsigned long timeRev;  // duration reed switch closed
-unsigned long timePulseOn; // time for next pulse to electromagnet
-unsigned long timePulseOff; // time to turn off electromagnet
-unsigned long timeDelta; // time between electromagnet pulses
-unsigned long kappa; // constant relating input and output frequencies
+uint32_t timeNow;
+uint32_t timeStart;  // time when reed switch goes LOW
+uint32_t timeEnd;  // time when reed switch goes HIGH
+uint32_t timeRev;  // duration reed switch closed
+uint32_t timePulseOn; // time for next pulse to electromagnet
+uint32_t timePulseOff; // time to turn off electromagnet
+uint32_t timeDelta; // time between electromagnet pulses
 bool oldState; // was reed switch open?
 bool newState; // is reed switch open?
 bool electromagnetState; // is electromagnet on?
@@ -66,7 +67,7 @@ ISR (INT0_vect)          //External interrupt_zero ISR
 void sleep()
 {
 	GIMSK |= _BV(INT0);                     // Enable INT0 Interrupts
-	MCUCR &= 0xfc;                          // ISC01 ISC00 0 0 The low level of INT0 generates an interrupt request.
+	MCUCR |= 0x03;                          // ISC01 ISC00 1 1 The rising edge of INT0 generates an interrupt request.
 	ADCSRA &= ~_BV(ADEN);                   // ADC off
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN);    //
 	sleep_enable();                         // Sets the Sleep Enable bit in the MCUCR Register (SE BIT)
@@ -97,6 +98,8 @@ void initState()
 	oldState = HIGH;
 	electromagnetState = LOW;
 	timeDelta = 0; // when 0 EM cannot be turned on
+	flash(3);
+
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -117,7 +120,6 @@ void setup()
 	PORTB = (1 << PB2); // PB2 has a pull-up
 	DDRB = ((1 << DDB0) | (1 << DDB1) | (1 << DDB3) | (1 << DDB4)); // 4 ports are outputs and 2 inputs
 	initState();
-	kappa = ((timeSlow - timeFast) << 10) / (timeSlow - (timeFast >> 1)); // we calculate 1024 * kappa
 }
 
 
@@ -180,7 +182,6 @@ void loop()
 			{
 				flash(5);
 				sleep();
-				flash(3);
 				initState();  // all state variables initialised after sleep
 			}
 		}

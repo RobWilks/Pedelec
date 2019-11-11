@@ -90,6 +90,17 @@ uint32_t calcTimeDelta(uint32_t dt)
 	return deltaT;
 }
 /////////////////////////////////////////////////////////////////////////
+void flash(uint8_t nTimes)
+{
+	for (uint8_t i = 0; i <= nTimes; i++)
+	{
+		PORTB |= (1 << PB1);
+		delay(100);
+		PORTB &= ~(1 << PB1);
+		delay(100);
+	}
+}
+/////////////////////////////////////////////////////////////////////////
 
 void initState()
 {
@@ -100,17 +111,6 @@ void initState()
 	timeDelta = 0; // when 0 EM cannot be turned on
 	flash(3);
 
-}
-
-/////////////////////////////////////////////////////////////////////////
-void flash(uint8_t nTimes)
-
-for (uint8_t i = 0; i <= nTimes; i++)
-{
-	PORTB |= (1 << PB1);
-	delay(100);
-	PORTB &= ~(1 << PB1);
-	delay(100);
 }
 
 /////////////////////////////////////////////////////////////////////////

@@ -177,19 +177,3 @@ void loop()
       }
     }
  }
-	if (timeRev > timeSlowest)
-	{
-		timeDelta = 0; // stop pulsing the electromagnet if there is no input to reed switch
-		
-		
-		if (timeRev > timeSleep)
-		{
-			if (!electromagnetState)  // only sleep when the EM is off
-			{
-				flash(5);
-				sleep();
-				initState();  // all state variables initialised after sleep
-			}
-		}
-	}
-}

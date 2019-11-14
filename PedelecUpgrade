@@ -5,7 +5,7 @@
 
 // Speed Derestrictor
 // Rob Wilkinson
-// 14 Nov 2019
+// 8 Nov 2019
 //
 //                                 ATMEL ATTINY 85
 //
@@ -35,6 +35,7 @@ const uint32_t timeSlowest = 4000; // for values larger than this threshold ther
 const uint32_t timeSlow = 800; // timeLow is a threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is reduced - 800msec is approx 10kmh
 const uint32_t timeFast = 330; // second threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is constant - 330msec is approx 24kmh
 const uint32_t distSensorAxle = 300;  // normal distance from reed switch magnet to axle in mm. To do calculate time thresholds from sensor position
+const uint32_t kappa = ((timeSlow - timeFast) << 10) / (timeSlow - (timeFast >> 1)); // constant relating input and output frequencies; we calculate 1024 
 
 
 // variables will change:
@@ -55,7 +56,7 @@ static volatile byte watchdogCounter;
 // boilerplate for low-power waiting
 ISR(WDT_vect)
 {
-  Sleepy::watchdogEvent();
+	Sleepy::watchdogEvent();
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -65,47 +66,50 @@ ISR (INT0_vect)          //External interrupt_zero ISR
 /////////////////////////////////////////////////////////////////////////
 void sleep()
 {
-  GIMSK |= _BV(INT0);                     // Enable INT0 Interrupts
-  MCUCR &= 0xfc;                          // ISC01 ISC00 0 0 Level LOW on INT0 generates an interrupt request.
-  ADCSRA &= ~_BV(ADEN);                   // ADC off
-  set_sleep_mode(SLEEP_MODE_PWR_DOWN);    //
-  sleep_enable();                         // Sets the Sleep Enable bit in the MCUCR Register (SE BIT)
-  sei();                                  // Enable interrupts
-  sleep_cpu();                            // sleep
-  cli();                                  // Disable interrupts
-  GIMSK &= ~_BV(INT0);                    // Disable INT0 Interrupts
-  sleep_disable();                        // Clear SE bit
-  ADCSRA |= _BV(ADEN);                    // ADC on
-  sei();                                  // Enable interrupts
+	GIMSK |= _BV(INT0);                     // Enable INT0 Interrupts
+	MCUCR &= 0xfc;                          // ISC01 ISC00 0 0 Level LOW on INT0 generates an interrupt request.
+	ADCSRA &= ~_BV(ADEN);                   // ADC off
+	set_sleep_mode(SLEEP_MODE_PWR_DOWN);    //
+	sleep_enable();                         // Sets the Sleep Enable bit in the MCUCR Register (SE BIT)
+	sei();                                  // Enable interrupts
+	sleep_cpu();                            // sleep
+	cli();                                  // Disable interrupts
+	GIMSK &= ~_BV(INT0);                    // Disable INT0 Interrupts
+	sleep_disable();                        // Clear SE bit
+	ADCSRA |= _BV(ADEN);                    // ADC on
+	sei();                                  // Enable interrupts
 } // sleep
 /////////////////////////////////////////////////////////////////////////
 
 uint32_t calcTimeDelta(uint32_t dt)
 {
-  if (dt > timeSlowest) return 0; // when 0 EM cannot be turned on
-  return (dt << 1);
+	if (dt > timeSlowest) return 0; // when 0 EM cannot be turned on
+	if (dt > timeSlow) return dt;
+	uint32_t deltaT = ((timeSlow << 10) - (timeSlow - dt) * kappa) >> 10;
+	if (deltaT < timeFast) return timeFast;
+	return deltaT;
 }
 /////////////////////////////////////////////////////////////////////////
 void flash(uint8_t nTimes)
 {
-  for (uint8_t i = 0; i <= nTimes; i++)
-  {
-    PORTB |= (1 << PB1);
-    delay(100);
-    PORTB &= ~(1 << PB1);
-    delay(400);
-  }
+	for (uint8_t i = 0; i <= nTimes; i++)
+	{
+		PORTB |= (1 << PB1);
+		delay(100);
+		PORTB &= ~(1 << PB1);
+		delay(100);
+	}
 }
 /////////////////////////////////////////////////////////////////////////
 
 void initState()
 {
-  timeStart = millis();
-  timePulseOn = timeStart;
-  oldState = HIGH;
-  electromagnetState = LOW;
-  timeDelta = 0; // when 0 EM cannot be turned on
-  flash(3);
+	timeStart = millis();
+	timePulseOn = timeStart;
+	oldState = HIGH;
+	electromagnetState = LOW;
+	timeDelta = 0; // when 0 EM cannot be turned on
+	flash(3);
 
 }
 
@@ -113,9 +117,9 @@ void initState()
 
 void setup()
 {
-  PORTB = (1 << PB2); // PB2 has a pull-up
-  DDRB = ((1 << DDB0) | (1 << DDB1) | (1 << DDB3) | (1 << DDB4)); // 4 ports are outputs and 2 inputs
-  initState();
+	PORTB = (1 << PB2); // PB2 has a pull-up
+	DDRB = ((1 << DDB0) | (1 << DDB1) | (1 << DDB3) | (1 << DDB4)); // 4 ports are outputs and 2 inputs
+	initState();
 }
 
 
@@ -124,56 +128,62 @@ void setup()
 
 void loop()
 {
-  timeNow = millis();
-  timeRev = timeNow - timeStart; // strictly time since last reed pulse
+	timeNow = millis();
+	timeRev = timeNow - timeStart; // strictly time since last reed pulse
 
-  newState = bool(PINB >> PINB2);
-  
-  if(newState != oldState)
-  {
-    delay(timeDebounce);  // this delays the main loop and reduces accuracy of other timing
-    if (newState == bool(PINB >> PINB2))
-    {
-      oldState = newState;
-      if (newState == LOW)
-      {
-        timeDelta = calcTimeDelta(timeRev); // calculate the time between successive EM pulses
-        timeStart = timeNow;
-      }
-      else
-      {
-        timeEnd = timeNow; // To do: use the duration of the reed switch pulse
-      }
-    }
-  }
-  
+	newState = bool(PINB >> PINB2);
+	
+	if(newState != oldState)
+	{
+		delay(timeDebounce);  // this delays the main loop and reduces accuracy of other timing
+		if (newState == bool(PINB >> PINB2))
+		{
+			oldState = newState;
+			if (newState == LOW)
+			{
+				timeDelta = calcTimeDelta(timeRev); // calculate the time between successive EM pulses
+				timeStart = timeNow;
+			}
+			else
+			{
+				timeEnd = timeNow; // To do: use the duration of the reed switch pulse
+			}
+		}
+	}
+	
 
-  
-  if (electromagnetState)
-  {
-    if (timeNow > timePulseOff)  // turn off EM
-    {
-      PORTB &= ~((1 << PB0) | (1 << PB3) | (1 << PB4));
-      electromagnetState = LOW;
-    }
-  }
-  else
-  if ((timeNow > timePulseOn) && (timeDelta != 0)) // turn on EM
-  {
-    PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
-    electromagnetState = HIGH;
-    timePulseOff = timeNow + timeOutputPulse;  // set time to turn off EM
-    timePulseOn = timeNow + timeDelta; // set time for next EM pulse
-  }
-  
-  
-    if (timeRev > timeSleep)
-    {
-      if (!electromagnetState)  // only sleep when the EM is off
-      {
-        flash(5);
-        sleep();
-        initState();  // all state variables initialised after sleep
-      }
-    }
- }
+	
+	if (electromagnetState)
+	{
+		if (timeNow > timePulseOff)  // turn off EM
+		{
+			PORTB &= ~((1 << PB0) | (1 << PB3) | (1 << PB4));
+			electromagnetState = LOW;
+		}
+	}
+	else
+	if ((timeNow > timePulseOn) && (timeDelta != 0)) // turn on EM
+	{
+		PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
+		electromagnetState = HIGH;
+		timePulseOff = timeNow + timeOutputPulse;  // set time to turn off EM
+		timePulseOn = timeNow + timeDelta; // set time for next EM pulse
+	}
+	
+	
+	if (timeRev > timeSlowest)
+	{
+		timeDelta = 0; // stop pulsing the electromagnet if there is no input to reed switch
+		
+		
+		if (timeRev > timeSleep)
+		{
+			if (!electromagnetState)  // only sleep when the EM is off
+			{
+				flash(5);
+				sleep();
+				initState();  // all state variables initialised after sleep
+			}
+		}
+	}
+}

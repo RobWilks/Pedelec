@@ -130,9 +130,6 @@ void setup()
 
 void loop()
 {
-	timeNow = millis();
-	timeRev = timeNow - timeEnd; // strictly time since last reed pulse
-
 	newState = bool(PINB >> PINB2);
 	
 	if(newState != oldState)
@@ -143,13 +140,15 @@ void loop()
 			oldState = newState;
 			if (newState == LOW)
 			{
-				timeStart = timeNow;
+				timeStart = millis();
 			}
 			else
 			{
-				timeEnd = timeNow;
-				if ((timeEnd - timeStart) < timeMaxTransit) // check got expected pulse	duration
+				timeNow = millis();
+				if ((timeNow - timeStart) < timeMaxTransit) // check got expected pulse	duration
 				{
+					timeRev = timeNow - timeEnd;
+					timeEnd = timeNow;
 					timeDelta = calcTimeDelta(timeRev); // calculate the time between successive EM pulses
 					if (timeDelta < timeSlowest)
 					{
@@ -157,9 +156,9 @@ void loop()
 					}
 					else
 					{
-						timePulseOn = timeNow;	// fire EM immediately at low speeds					
+						timePulseOn = timeNow;	// fire EM immediately at low speeds
 					}
-				}			
+				}
 			}
 		}
 	}
@@ -168,7 +167,7 @@ void loop()
 	
 	if (electromagnetState)
 	{
-		if (timeNow >= timePulseOff)  // turn off EM
+		if (millis() >= timePulseOff)  // turn off EM
 		{
 			PORTB &= ~((1 << PB0) | (1 << PB3) | (1 << PB4));
 			electromagnetState = LOW;
@@ -176,6 +175,7 @@ void loop()
 	}
 	else
 	{
+		timeNow = millis();
 		if ((timeNow >= timePulseOn) && (timeDelta != 0)) // turn on EM
 		{
 			PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));

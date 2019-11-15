@@ -5,7 +5,7 @@
 
 // Speed Derestrictor
 // Rob Wilkinson
-// 8 Nov 2019
+// 15 Nov 2019
 //
 //                                 ATMEL ATTINY 85
 //
@@ -34,6 +34,7 @@ const uint32_t timeSleep = 30000; // elapsed time before shutdown in millisecond
 const uint32_t timeSlowest = 4000; // for values larger than this threshold there are no pulses - 4000msec is approx 2kmh
 const uint32_t timeSlow = 800; // timeLow is a threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is reduced - 800msec is approx 10kmh
 const uint32_t timeFast = 330; // second threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is constant - 330msec is approx 24kmh
+const uint32_t timeMaxTransit = 90; // maximum duration of reed switch pulse in msec
 const uint32_t distSensorAxle = 300;  // normal distance from reed switch magnet to axle in mm. To do calculate time thresholds from sensor position
 const uint32_t kappa = ((timeSlow - timeFast) << 10) / (timeSlow - (timeFast >> 1)); // constant relating input and output frequencies; we calculate 1024 
 
@@ -46,6 +47,7 @@ uint32_t timeRev;  // duration reed switch closed
 uint32_t timePulseOn; // time for next pulse to electromagnet
 uint32_t timePulseOff; // time to turn off electromagnet
 uint32_t timeDelta; // time between electromagnet pulses
+uint32_t timeLastPulse; // time of start of last EM pulse
 bool oldState; // was reed switch open?
 bool newState; // is reed switch open?
 bool electromagnetState; // is electromagnet on?
@@ -83,7 +85,6 @@ void sleep()
 
 uint32_t calcTimeDelta(uint32_t dt)
 {
-	if (dt > timeSlowest) return 0; // when 0 EM cannot be turned on
 	if (dt > timeSlow) return dt;
 	uint32_t deltaT = ((timeSlow << 10) - (timeSlow - dt) * kappa) >> 10;
 	if (deltaT < timeFast) return timeFast;
@@ -97,15 +98,16 @@ void flash(uint8_t nTimes)
 		PORTB |= (1 << PB1);
 		delay(100);
 		PORTB &= ~(1 << PB1);
-		delay(100);
+		delay(400);
 	}
 }
 /////////////////////////////////////////////////////////////////////////
 
 void initState()
 {
-	timeStart = millis();
-	timePulseOn = timeStart;
+	timeEnd = millis();
+	timePulseOn = 0xffffffff;
+	timeLastPulse = timeEnd;
 	oldState = HIGH;
 	electromagnetState = LOW;
 	timeDelta = 0; // when 0 EM cannot be turned on
@@ -129,7 +131,7 @@ void setup()
 void loop()
 {
 	timeNow = millis();
-	timeRev = timeNow - timeStart; // strictly time since last reed pulse
+	timeRev = timeNow - timeEnd; // strictly time since last reed pulse
 
 	newState = bool(PINB >> PINB2);
 	
@@ -141,12 +143,23 @@ void loop()
 			oldState = newState;
 			if (newState == LOW)
 			{
-				timeDelta = calcTimeDelta(timeRev); // calculate the time between successive EM pulses
 				timeStart = timeNow;
 			}
 			else
 			{
-				timeEnd = timeNow; // To do: use the duration of the reed switch pulse
+				timeEnd = timeNow;
+				if ((timeEnd - timeStart) < timeMaxTransit) // check got expected pulse	duration
+				{
+					timeDelta = calcTimeDelta(timeRev); // calculate the time between successive EM pulses
+					if (timeDelta < timeSlowest)
+					{
+						timePulseOn = timeLastPulse + timeDelta; // set time for next EM pulse
+					}
+					else
+					{
+						timePulseOn = timeNow;	// fire EM immediately at low speeds					
+					}
+				}			
 			}
 		}
 	}
@@ -155,35 +168,32 @@ void loop()
 	
 	if (electromagnetState)
 	{
-		if (timeNow > timePulseOff)  // turn off EM
+		if (timeNow >= timePulseOff)  // turn off EM
 		{
 			PORTB &= ~((1 << PB0) | (1 << PB3) | (1 << PB4));
 			electromagnetState = LOW;
 		}
 	}
 	else
-	if ((timeNow > timePulseOn) && (timeDelta != 0)) // turn on EM
+	if ((timeNow >= timePulseOn) && (timeDelta != 0)) // turn on EM
 	{
 		PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
 		electromagnetState = HIGH;
 		timePulseOff = timeNow + timeOutputPulse;  // set time to turn off EM
-		timePulseOn = timeNow + timeDelta; // set time for next EM pulse
+		timeLastPulse = timeNow;
+		timeDelta = 0; // require recalculation of timeDelta before next EM pulse
 	}
 	
 	
-	if (timeRev > timeSlowest)
+	
+	
+	if (timeRev > timeSleep)
 	{
-		timeDelta = 0; // stop pulsing the electromagnet if there is no input to reed switch
-		
-		
-		if (timeRev > timeSleep)
+		if (!electromagnetState)  // only sleep when the EM is off
 		{
-			if (!electromagnetState)  // only sleep when the EM is off
-			{
-				flash(5);
-				sleep();
-				initState();  // all state variables initialised after sleep
-			}
+			flash(5);
+			sleep();
+			initState();  // all state variables initialised after sleep
 		}
 	}
 }

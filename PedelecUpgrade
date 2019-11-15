@@ -184,18 +184,18 @@ void loop()
 			timeLastPulse = timeNow;
 			timeDelta = 0; // require recalculation of timeDelta before next EM pulse
 		}
-	}
-	
-	
-	
-	
-	if (timeRev > timeSleep)
-	{
-		if (!electromagnetState)  // only sleep when the EM is off
+		else
 		{
-			flash(5);
-			sleep();
-			initState();  // all state variables initialised after sleep
+			if ((timeNow - timeEnd) > timeSleep)
+			{
+					flash(5);
+					sleep();
+					initState();  // all state variables initialised after sleep
+			}
 		}
 	}
+	
+	
+	
+	
 }

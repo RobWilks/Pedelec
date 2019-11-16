@@ -29,9 +29,9 @@
 
 
 const uint32_t timeDebounce = 1; //debouncing time in milliseconds
-const uint32_t timeOutputPulse = 30; // duration of electromagnet pulse in milliseconds
+const uint32_t timeOutputPulse = 20; // duration of electromagnet pulse in milliseconds.  Works with 30, but >>higher than values calculated from transit of permanent magnet
 const uint32_t timeSleep = 30000; // elapsed time before shutdown in milliseconds
-const uint32_t timeSlowest = 4000; // for values larger than this threshold there are no pulses - 4000msec is approx 2kmh
+const uint32_t timeSlowest = 4000; // for values larger than this threshold an input pulse immediately triggers an output pulse - 4000msec is approx 2kmh
 const uint32_t timeSlow = 800; // timeLow is a threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is reduced - 800msec is approx 10kmh
 const uint32_t timeFast = 330; // second threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is constant - 330msec is approx 24kmh
 const uint32_t timeMaxTransit = 90; // maximum duration of reed switch pulse in msec
@@ -119,10 +119,16 @@ bool checkTest(uint8_t n)
 void test()
 {
 	bool pinState = false;
+	int8_t nTimes = 0;
 	while (!pinState)
 	{
 		pinState = bool(PINB >> PINB2);
-		PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
+		if (nTimes < 240) // stays in test but stops pulses after 4 minutes to avoid inadvertent battery drain
+		// could sleep here but would require wake on PIN2 HIGH
+		{
+			PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
+			++nTimes;
+		}
 		delay(timeOutputPulse);
 		PORTB &= ~((1 << PB0) | (1 << PB3) | (1 << PB4));
 		delay(1000);
@@ -177,7 +183,7 @@ void loop()
 					timeRev = timeNow - timeEnd;
 					timeEnd = timeNow;
 					timeDelta = calcTimeDelta(timeRev); // calculate the time between successive EM pulses
-					if (timeDelta < timeSlowest)
+					if (timeDelta < timeSlowest) // unsure whether the two conditions are needed. Wanted to ensure motor control circuit receives pulses immediately when the bike begins to move
 					{
 						timePulseOn = timeLastPulse + timeDelta; // set time for next EM pulse
 					}
@@ -225,5 +231,4 @@ void loop()
 			}
 		}
 	}
-	
 }

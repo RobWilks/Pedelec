@@ -102,6 +102,33 @@ void flash(uint8_t nTimes)
 	}
 }
 /////////////////////////////////////////////////////////////////////////
+bool checkTest(uint8_t n)
+// returns true if reed switch closed for 20 sec
+{
+	bool pinState = false;
+	uint8_t i = 0;
+	while ((i <= n) && !pinState) // enter test state after n sec
+	{
+		pinState = bool(PINB >> PINB2);
+		delay(1000);
+		i++;
+	}
+	return (!pinState);
+}
+/////////////////////////////////////////////////////////////////////////
+void test()
+{
+	bool pinState = false;
+	while (!pinState)
+	{
+		pinState = bool(PINB >> PINB2);
+		PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
+		delay(timeOutputPulse);
+		PORTB &= ~((1 << PB0) | (1 << PB3) | (1 << PB4));
+		delay(1000);
+	}
+}
+/////////////////////////////////////////////////////////////////////////
 
 void initState()
 {
@@ -184,18 +211,19 @@ void loop()
 			timeLastPulse = timeNow;
 			timeDelta = 0; // require recalculation of timeDelta before next EM pulse
 		}
-		else
+		else // can sleep only if EM is off
 		{
 			if ((timeNow - timeEnd) > timeSleep)
 			{
 					flash(5);
 					sleep();
+					if (checkTest(20)) 
+					{
+						test();
+					}
 					initState();  // all state variables initialised after sleep
 			}
 		}
 	}
-	
-	
-	
 	
 }

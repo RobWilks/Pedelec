@@ -36,7 +36,7 @@ const uint32_t timeSlow = 800; // timeLow is a threshold time of revolution. For
 const uint32_t timeFast = 330; // second threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is constant - 330msec is approx 24kmh
 const uint32_t timeMaxTransit = 90; // maximum duration of reed switch pulse in msec
 const uint32_t distSensorAxle = 300;  // normal distance from reed switch magnet to axle in mm. To do calculate time thresholds from sensor position
-const uint32_t kappa = ((timeSlow - timeFast) << 10) / (timeSlow - (timeFast >> 1)); // constant relating input and output frequencies; we calculate 1024 
+const uint32_t kappa = ((timeSlow - timeFast) << 10) / (timeSlow + (timeFast >> 2) - (timeFast >> 1)); // constant relating input and output frequencies; we calculate 1024 
 
 
 // variables will change:
@@ -66,10 +66,11 @@ ISR (INT0_vect)          //External interrupt_zero ISR
 {
 }
 /////////////////////////////////////////////////////////////////////////
-void sleep()
+void sleep(int8_t wakeUpCall)
 {
 	GIMSK |= _BV(INT0);                     // Enable INT0 Interrupts
 	MCUCR &= 0xfc;                          // ISC01 ISC00 0 0 Level LOW on INT0 generates an interrupt request.
+	MCUCR |= wakeUpCall;                    // ISC01 ISC00 0 1 Level logic level change on INT0 generates an interrupt request.
 	ADCSRA &= ~_BV(ADEN);                   // ADC off
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN);    //
 	sleep_enable();                         // Sets the Sleep Enable bit in the MCUCR Register (SE BIT)
@@ -123,15 +124,19 @@ void test()
 	while (!pinState)
 	{
 		pinState = bool(PINB >> PINB2);
-		if (nTimes < 240) // stays in test but stops pulses after 4 minutes to avoid inadvertent battery drain
+		//if (nTimes < 240) // stays in test but stops pulses after 4 minutes to avoid inadvertent battery drain
+		//// could sleep here but would require wake on PIN2 HIGH
+		//{
+		//PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
+		//++nTimes;
+		//}
 		// could sleep here but would require wake on PIN2 HIGH
-		{
-			PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
-			++nTimes;
-		}
+		PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
 		delay(timeOutputPulse);
 		PORTB &= ~((1 << PB0) | (1 << PB3) | (1 << PB4));
 		delay(1000);
+		++nTimes;
+		if (nTimes > 240) sleep(1);
 	}
 }
 /////////////////////////////////////////////////////////////////////////
@@ -222,7 +227,7 @@ void loop()
 			if ((timeNow - timeEnd) > timeSleep)
 			{
 					flash(5);
-					sleep();
+					sleep(0);
 					if (checkTest(20)) 
 					{
 						test();

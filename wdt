@@ -1,0 +1,46 @@
+
+#include <avr/sleep.h>
+#include <avr/wdt.h>
+
+#define LED 0
+
+volatile boolean on = true;
+
+ISR(WDT_vect) 
+  {
+  on = !on;
+  wdt_disable();  
+  }
+
+void myWatchdogEnable(const byte interval) 
+  {
+
+  noInterrupts();
+
+  wdt_reset();
+    
+  MCUSR = 0;                          // reset various flags
+  WDTCR |= 0b00011000;               // see docs, set WDCE, WDE
+  WDTCR =  0b01000110 | interval;    // set WDIE, and appropriate delay
+  
+  ADCSRA &= ~_BV(ADEN);
+
+  set_sleep_mode (SLEEP_MODE_PWR_DOWN); 
+  sleep_bod_disable();
+  interrupts();
+  sleep_mode();     
+  
+  } 
+
+void setup()
+{
+pinMode (LED, OUTPUT);
+}  
+
+void loop(){
+
+  digitalWrite (LED, on); 
+
+  myWatchdogEnable (0b000110);  // 1 second
+
+}  

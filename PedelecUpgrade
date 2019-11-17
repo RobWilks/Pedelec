@@ -66,12 +66,13 @@ ISR (INT0_vect)          //External interrupt_zero ISR
 {
 }
 /////////////////////////////////////////////////////////////////////////
-void sleep(int8_t wakeUpCall)
+void sleep()
+// powerdown and wake on external interrupt
 {
 	GIMSK |= _BV(INT0);                     // Enable INT0 Interrupts
 	MCUCR &= 0xfc;                          // ISC01 ISC00 0 0 Level LOW on INT0 generates an interrupt request.
-	MCUCR |= wakeUpCall;                    // ISC01 ISC00 0 1 Level logic level change on INT0 generates an interrupt request.
-	ADCSRA &= ~_BV(ADEN);                   // ADC off
+    byte adcsraSave = ADCSRA;
+    ADCSRA &= ~ bit(ADEN);					// disable the ADC
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN);    //
 	sleep_enable();                         // Sets the Sleep Enable bit in the MCUCR Register (SE BIT)
 	sei();                                  // Enable interrupts
@@ -79,7 +80,7 @@ void sleep(int8_t wakeUpCall)
 	cli();                                  // Disable interrupts
 	GIMSK &= ~_BV(INT0);                    // Disable INT0 Interrupts
 	sleep_disable();                        // Clear SE bit
-	ADCSRA |= _BV(ADEN);                    // ADC on
+    ADCSRA = adcsraSave;					// restore the ADC
 	sei();                                  // Enable interrupts
 } // sleep
 /////////////////////////////////////////////////////////////////////////
@@ -124,19 +125,20 @@ void test()
 	while (!pinState)
 	{
 		pinState = bool(PINB >> PINB2);
-		//if (nTimes < 240) // stays in test but stops pulses after 4 minutes to avoid inadvertent battery drain
-		//// could sleep here but would require wake on PIN2 HIGH
-		//{
-		//PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
-		//++nTimes;
-		//}
-		// could sleep here but would require wake on PIN2 HIGH
+		if (nTimes < 60) // stays in test but stops pulses after 4 minutes to avoid inadvertent battery drain
+		// and sleeps using watchdog timer
+		{
 		PORTB |= ((1 << PB0) | (1 << PB3) | (1 << PB4));
+		++nTimes;
 		delay(timeOutputPulse);
 		PORTB &= ~((1 << PB0) | (1 << PB3) | (1 << PB4));
 		delay(1000);
 		++nTimes;
-		if (nTimes > 240) sleep(1);
+		}
+		else
+		{
+			Sleepy::loseSomeTime(8000);
+		}
 	}
 }
 /////////////////////////////////////////////////////////////////////////
@@ -159,6 +161,7 @@ void setup()
 {
 	PORTB = (1 << PB2); // PB2 has a pull-up
 	DDRB = ((1 << DDB0) | (1 << DDB1) | (1 << DDB3) | (1 << DDB4)); // 4 ports are outputs and 2 inputs
+	ADCSRA &= ~ bit(ADEN);					// disable the ADC to save power
 	initState();
 }
 
@@ -227,7 +230,7 @@ void loop()
 			if ((timeNow - timeEnd) > timeSleep)
 			{
 					flash(5);
-					sleep(0);
+					sleep();
 					if (checkTest(20)) 
 					{
 						test();

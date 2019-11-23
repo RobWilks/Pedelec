@@ -5,7 +5,7 @@
 
 // Speed Derestrictor
 // Rob Wilkinson
-// 15 Nov 2019
+// 23 Nov 2019
 //
 //                                 ATMEL ATTINY 85
 //
@@ -29,7 +29,7 @@
 
 
 const uint32_t timeDebounce = 1; //debouncing time in milliseconds
-const uint32_t timeOutputPulse = 20; // duration of electromagnet pulse in milliseconds.  Works with 30, but >>higher than values calculated from transit of permanent magnet
+const uint32_t timeOutputPulse = 10; // duration of electromagnet pulse in milliseconds.  Works with 30, but >>higher than values calculated from transit of permanent magnet
 const uint32_t timeSleep = 30000; // elapsed time before shutdown in milliseconds
 const uint32_t timeSlowest = 4000; // for values larger than this threshold an input pulse immediately triggers an output pulse - 4000msec is approx 2kmh
 const uint32_t timeSlow = 800; // timeLow is a threshold time of revolution. For values smaller than this threshold the electromagnet pulse frequency is reduced - 800msec is approx 10kmh
@@ -151,7 +151,7 @@ void initState()
 	oldState = HIGH;
 	electromagnetState = LOW;
 	timeDelta = 0; // when 0 EM cannot be turned on
-	flash(3);
+	flash(1);
 
 }
 
